@@ -18,4 +18,7 @@ actix-files = "~0.2"
 actix-rt = "~1"
 actix-web = "~2"
 env_logger = "~0.7"
+kube = {version = "~0.25", features = ["openapi"]}
+k8s-openapi = {version = "~0.7", default-features = false, features = ["v1_15"]}
+actix-helper-macros = "~0.2"
 
