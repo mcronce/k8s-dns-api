@@ -18,7 +18,7 @@ struct State {
 
 /*
 // TODO:  Figure out how to make this work since the OpenAPI types are all versioned
-fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<String> {
+fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<String> /* {{{ */ {
 	let cluster_ip = match &service.spec.cluster_ip {
 		None => return None,
 		Some(s) => s
@@ -30,11 +30,11 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 		return format!("{} {}.{}{}", cluster_ip, service.metadata.name, service.metadata.namespace, tld);
 	}
 	format!("{} {}{}", cluster_ip, service.metadata.name, tld)
-}
+} // }}}
 */
 
 #[responder]
-async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> /* {{{ */ {
 	// STARS, STARS everywhere.  Make it rain STARS.
 	let services = kube::api::Api::v1Service((**state).client.clone());
 
@@ -73,7 +73,7 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 	}
 
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
-}
+} // }}}
 
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn Error>> {
