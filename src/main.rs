@@ -16,6 +16,23 @@ struct State {
 	client: kube::client::APIClient
 }
 
+/*
+// TODO:  Figure out how to make this work since the OpenAPI types are all versioned
+fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<String> {
+	let cluster_ip = match &service.spec.cluster_ip {
+		None => return None,
+		Some(s) => s
+	};
+	if(cluster_ip == "None") {
+		return None;
+	}
+	if(include_namespace) {
+		return format!("{} {}.{}{}", cluster_ip, service.metadata.name, service.metadata.namespace, state.tld);
+	}
+	format!("{} {}{}", cluster_ip, service.metadata.name, state.tld)
+}
+*/
+
 #[responder]
 async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
 	// STARS, STARS everywhere.  Make it rain STARS.
