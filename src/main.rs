@@ -27,9 +27,9 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 		return None;
 	}
 	if(include_namespace) {
-		return format!("{} {}.{}{}", cluster_ip, service.metadata.name, service.metadata.namespace, state.tld);
+		return format!("{} {}.{}{}", cluster_ip, service.metadata.name, service.metadata.namespace, tld);
 	}
-	format!("{} {}{}", cluster_ip, service.metadata.name, state.tld)
+	format!("{} {}{}", cluster_ip, service.metadata.name, tld)
 }
 */
 
