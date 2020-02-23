@@ -12,7 +12,7 @@ use std::error::Error;
 
 #[derive(Clone)]
 struct State {
-	tld: String,
+	service_tld: String,
 	client: kube::client::APIClient
 }
 
@@ -51,7 +51,7 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 		if(cluster_ip == "None") {
 			continue;
 		}
-		lines.push(format!("{} {}{}", cluster_ip, service.metadata.name, state.tld));
+		lines.push(format!("{} {}{}", cluster_ip, service.metadata.name, state.service_tld));
 	}
 
 	for service in all_services.iter() {
@@ -69,7 +69,7 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 		if(namespace == "") {
 			namespace = "default";
 		}
-		lines.push(format!("{} {}.{}{}", cluster_ip, service.metadata.name, namespace, state.tld));
+		lines.push(format!("{} {}.{}{}", cluster_ip, service.metadata.name, namespace, state.service_tld));
 	}
 
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
@@ -91,14 +91,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		},
 		None => "/www".to_string()
 	};
-	let tld = match env::var_os("NAMER_TLD") {
+	let service_tld = match env::var_os("NAMER_SERVICE_TLD") {
 		Some(val) => match val.into_string() {
 			Ok(v) => format!(".{}", v),
 			Err(e) => panic!(e)
 		},
 		None => "".to_string()
 	};
-
 	env::set_var("RUST_LOG", "actix_web=info");
 	env_logger::init();
 
@@ -108,7 +107,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	};
 
 	let state = State{
-		tld: tld,
+		service_tld: service_tld,
 		client: client
 	};
 
