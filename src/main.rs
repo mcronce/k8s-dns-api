@@ -35,8 +35,7 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 
 #[responder]
 async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> /* {{{ */ {
-	// STARS, STARS everywhere.  Make it rain STARS.
-	let services = kube::api::Api::v1Service((**state).client.clone());
+	let services = kube::api::Api::v1Service(state.client.clone());
 
 	let default_services = services.clone().within("default").list(&kube::api::ListParams::default()).await?;
 	let all_services = services.list(&kube::api::ListParams::default()).await?;
