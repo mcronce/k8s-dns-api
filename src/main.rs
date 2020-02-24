@@ -41,6 +41,7 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 	let default_services = services.clone().within("default").list(&kube::api::ListParams::default()).await?;
 	let all_services = services.list(&kube::api::ListParams::default()).await?;
 
+	// Capacity here is just a hint; it'll probably be more than this, but it saves quite a few reallocations
 	let mut lines = Vec::with_capacity(default_services.items.len() + all_services.items.len());
 
 	for service in default_services.iter() {
