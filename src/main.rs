@@ -13,6 +13,7 @@ use std::error::Error;
 #[derive(Clone)]
 struct State {
 	service_tld: String,
+	ingress_tld: String,
 	client: kube::client::APIClient
 }
 
@@ -74,6 +75,61 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
 } // }}}
 
+#[responder]
+async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> /* {{{ */ {
+	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
+	let services = kube::api::Api::v1Service(state.client.clone());
+	let ingresses = kube::api::Api::v1beta1Ingress(state.client.clone());
+
+	let ingress_service_ip = match {
+		let list = services.within("kube-system").list(&kube::api::ListParams::default()).await?;
+		(|| {
+			for service in list.iter() {
+				// TODO:  Allow configurable name
+				if(service.metadata.name == "traefik-internal") {
+					match &service.spec.cluster_ip {
+						None => return None,
+						Some(s) => {
+							if(s == "None") {
+								return None
+							} else {
+								return Some(s.to_owned())
+							}
+						}
+					};
+				}
+			}
+			None
+		})()
+	} {
+		None => return Ok(actix_helper_macros::code!(InternalServerError)),
+		Some(s) => s
+	};
+
+	let list = ingresses.list(&kube::api::ListParams::default()).await?;
+	// Capacity here is just a hint; we could have multiple hostnames per ingress, but this will save a lot of reallocations regardless
+	let mut lines = Vec::with_capacity(list.items.len());
+	for ingress in list.iter() {
+		// TODO:  Allow configurable name
+		match ingress.metadata.annotations.get("kubernetes.io/ingress.class") {
+			None => continue,
+			Some(class) => if(class == "traefik-internal") {
+				match &ingress.spec.rules {
+					None => continue,
+					Some(rules) => for rule in rules.iter() {
+						match &rule.host {
+							None => continue,
+							Some(host) => lines.push(format!("{} {}{}", ingress_service_ip, host, state.ingress_tld))
+						};
+					}
+				};
+			}
+		};
+	}
+
+	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+} // }}}
+
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let port = match env::var_os("NAMER_PORT") {
@@ -97,6 +153,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		},
 		None => "".to_string()
 	};
+	let ingress_tld = match env::var_os("NAMER_INGRESS_TLD") {
+		Some(val) => match val.into_string() {
+			Ok(v) => format!(".{}", v),
+			Err(e) => panic!(e)
+		},
+		None => "".to_string()
+	};
+
 	env::set_var("RUST_LOG", "actix_web=info");
 	env_logger::init();
 
@@ -107,6 +171,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 	let state = State{
 		service_tld: service_tld,
+		ingress_tld: ingress_tld,
 		client: client
 	};
 
@@ -114,6 +179,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		.data(state.clone())
 		.wrap(actix_web::middleware::Logger::default())
 		.route("/services.list", actix_web::web::get().to(services))
+		.route("/ingress-internal.list", actix_web::web::get().to(ingresses))
 		.service(actix_files::Files::new("/", &dir))
 	).bind(format!("0.0.0.0:{}", port))?.run().await?;
 	Ok(result)
