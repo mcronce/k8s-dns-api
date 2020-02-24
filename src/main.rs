@@ -80,6 +80,12 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
 }
 
+#[responder]
+async fn services_unbound(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
+	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+}
+
 #[derive(Debug)]
 struct IngressNotFoundError; // {{{
 impl std::fmt::Display for IngressNotFoundError {
@@ -154,6 +160,12 @@ async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::R
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
 }
 
+#[responder]
+async fn ingresses_unbound(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
+	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+}
+
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let port = match env::var_os("NAMER_PORT") {
@@ -206,7 +218,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		.data(state.clone())
 		.wrap(actix_web::middleware::Logger::default())
 		.route("/services.list", actix_web::web::get().to(services))
+		.route("/unbound/services.list", actix_web::web::get().to(services_unbound))
 		.route("/ingress-internal.list", actix_web::web::get().to(ingresses))
+		.route("/unbound/ingress-internal.list", actix_web::web::get().to(ingresses_unbound))
 		.service(actix_files::Files::new("/", &dir))
 	).bind(format!("0.0.0.0:{}", port))?.run().await?;
 	Ok(result)
