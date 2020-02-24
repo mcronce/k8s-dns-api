@@ -165,7 +165,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	env_logger::init();
 
 	let client = {
-		let k8s_config = kube::config::load_kube_config().await?;
+		let k8s_config = match kube::config::incluster_config() {
+			Ok(c) => c,
+			Err(_) => kube::config::load_kube_config().await?
+		};
 		kube::client::APIClient::new(k8s_config)
 	};
 
