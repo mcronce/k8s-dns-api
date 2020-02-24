@@ -33,9 +33,8 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 } // }}}
 */
 
-#[responder]
-async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> /* {{{ */ {
-	let services = kube::api::Api::v1Service(state.client.clone());
+async fn services_tuple(client: &kube::client::APIClient, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
+	let services = kube::api::Api::v1Service(client.clone());
 
 	let default_services = services.clone().within("default").list(&kube::api::ListParams::default()).await?;
 	let all_services = services.list(&kube::api::ListParams::default()).await?;
@@ -46,18 +45,18 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 	for service in default_services.iter() {
 		let cluster_ip = match &service.spec.cluster_ip {
 			None => continue,
-			Some(s) => s
+			Some(s) => s.clone()
 		};
 		if(cluster_ip == "None") {
 			continue;
 		}
-		lines.push(format!("{} {}{}", cluster_ip, service.metadata.name, state.service_tld));
+		lines.push((cluster_ip, format!("{}{}", service.metadata.name, tld)));
 	}
 
 	for service in all_services.iter() {
 		let cluster_ip = match &service.spec.cluster_ip {
 			None => continue,
-			Some(s) => s
+			Some(s) => s.clone()
 		};
 		if(cluster_ip == "None") {
 			continue;
@@ -69,17 +68,36 @@ async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::Re
 		if(namespace == "") {
 			namespace = "default";
 		}
-		lines.push(format!("{} {}.{}{}", cluster_ip, service.metadata.name, namespace, state.service_tld));
+		lines.push((cluster_ip, format!("{}.{}{}", service.metadata.name, namespace, tld)));
 	}
 
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines)
 } // }}}
 
 #[responder]
-async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> /* {{{ */ {
+async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
+	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+}
+
+#[derive(Debug)]
+struct IngressNotFoundError; // {{{
+impl std::fmt::Display for IngressNotFoundError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "Ingress not found")
+	}
+}
+impl Error for IngressNotFoundError {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		None
+	}
+}
+// }}}
+
+async fn ingresses_tuple(client: &kube::client::APIClient, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
 	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
-	let services = kube::api::Api::v1Service(state.client.clone());
-	let ingresses = kube::api::Api::v1beta1Ingress(state.client.clone());
+	let services = kube::api::Api::v1Service(client.clone());
+	let ingresses = kube::api::Api::v1beta1Ingress(client.clone());
 
 	let ingress_service_ip = match {
 		let list = services.within("kube-system").list(&kube::api::ListParams::default()).await?;
@@ -102,7 +120,7 @@ async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::R
 			None
 		})()
 	} {
-		None => return Ok(actix_helper_macros::code!(InternalServerError)),
+		None => return Err(Box::new(IngressNotFoundError)),
 		Some(s) => s
 	};
 
@@ -119,7 +137,7 @@ async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::R
 					Some(rules) => for rule in rules.iter() {
 						match &rule.host {
 							None => continue,
-							Some(host) => lines.push(format!("{} {}{}", ingress_service_ip, host, state.ingress_tld))
+							Some(host) => lines.push((ingress_service_ip.clone(), format!("{}{}", host, tld)))
 						};
 					}
 				};
@@ -127,8 +145,14 @@ async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::R
 		};
 	}
 
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines)
 } // }}}
+
+#[responder]
+async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
+	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+}
 
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn Error>> {
