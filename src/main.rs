@@ -7,7 +7,6 @@ extern crate kube;
 extern crate actix_helper_macros;
 
 use std::env;
-use std::sync;
 use std::error::Error;
 
 #[derive(Clone)]
