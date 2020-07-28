@@ -169,31 +169,19 @@ async fn ingresses_unbound(state: actix_web::web::Data<State>) -> actix_helper_m
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let port = match env::var_os("NAMER_PORT") {
-		Some(val) => match val.into_string() {
-			Ok(v) => v,
-			Err(e) => panic!(e)
-		}.parse::<usize>()?,
+		Some(val) => val.into_string().unwrap().parse::<usize>().unwrap(),
 		None => 80
 	};
 	let dir = match env::var_os("NAMER_STATIC_ROOT") {
-		Some(val) => match val.into_string() {
-			Ok(v) => v,
-			Err(e) => panic!(e)
-		},
+		Some(val) => val.into_string().unwrap(),
 		None => "/www".to_string()
 	};
 	let service_tld = match env::var_os("NAMER_SERVICE_TLD") {
-		Some(val) => match val.into_string() {
-			Ok(v) => format!(".{}", v),
-			Err(e) => panic!(e)
-		},
+		Some(val) => format!(".{}", val.into_string().unwrap()),
 		None => "".to_string()
 	};
 	let ingress_tld = match env::var_os("NAMER_INGRESS_TLD") {
-		Some(val) => match val.into_string() {
-			Ok(v) => format!(".{}", v),
-			Err(e) => panic!(e)
-		},
+		Some(val) => format!(".{}", val.into_string().unwrap()),
 		None => "".to_string()
 	};
 
