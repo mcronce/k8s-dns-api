@@ -120,7 +120,7 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 					None => continue
 				};
 				// TODO:  Allow configurable name
-				if(name == "traefik-internal") {
+				if(name == "ingress-nginx-internal-controller") {
 					match &service.spec.and_then(|s| s.cluster_ip) {
 						None => return None,
 						Some(s) => {
@@ -147,7 +147,7 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 		// TODO:  Allow configurable name
 		match ingress.spec.as_ref().and_then(|s| s.ingress_class_name.as_ref()) {
 			None => continue,
-			Some(class) => if(class == "traefik-internal") {
+			Some(class) => if(class == "internal") {
 				match ingress.spec.and_then(|s| s.rules) {
 					None => continue,
 					Some(rules) => for rule in rules.iter() {
