@@ -205,9 +205,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	};
 
 	let state = State{
-		service_tld: service_tld,
-		ingress_tld: ingress_tld,
-		client: client
+		service_tld,
+		ingress_tld,
+		client
 	};
 
 	let result = actix_web::HttpServer::new(move || actix_web::App::new()
