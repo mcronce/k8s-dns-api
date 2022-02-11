@@ -6,14 +6,21 @@ extern crate kube;
 #[macro_use]
 extern crate actix_helper_macros;
 
+use std::convert::TryInto;
 use std::env;
 use std::error::Error;
+
+use actix_web::web::Data;
+use k8s_openapi::api::core::v1::Service;
+use k8s_openapi::api::networking::v1::Ingress;
+use kube::api::Api;
+use kube::api::ListParams;
 
 #[derive(Clone)]
 struct State {
 	service_tld: String,
 	ingress_tld: String,
-	client: kube::client::APIClient
+	client: kube::Client
 }
 
 /*
@@ -33,42 +40,42 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 } // }}}
 */
 
-async fn services_tuple(client: &kube::client::APIClient, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
-	let services = kube::api::Api::v1Service(client.clone());
-
-	let default_services = services.clone().within("default").list(&kube::api::ListParams::default()).await?;
-	let all_services = services.list(&kube::api::ListParams::default()).await?;
+async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
+	let default_services = Api::<Service>::default_namespaced(client.clone()).list(&ListParams::default()).await?;
+	let all_services = Api::<Service>::all(client.clone()).list(&ListParams::default()).await?;
 
 	// Capacity here is just a hint; it'll probably be more than this, but it saves quite a few reallocations
 	let mut lines = Vec::with_capacity(default_services.items.len() + all_services.items.len());
 
-	for service in default_services.iter() {
-		let cluster_ip = match &service.spec.cluster_ip {
+	for service in default_services.into_iter() {
+		let name = match service.metadata.name.as_ref() {
 			None => continue,
-			Some(s) => s.clone()
+			Some(n) => n
 		};
-		if(cluster_ip == "None") {
-			continue;
-		}
-		lines.push((cluster_ip, format!("{}{}", service.metadata.name, tld)));
-	}
-
-	for service in all_services.iter() {
-		let cluster_ip = match &service.spec.cluster_ip {
+		let cluster_ip = match service.spec.and_then(|s| s.cluster_ip) {
 			None => continue,
-			Some(s) => s.clone()
-		};
-		if(cluster_ip == "None") {
-			continue;
-		}
-		let mut namespace = match &service.metadata.namespace {
-			None => "default",
+			Some(s) if s == "None" => continue,
 			Some(s) => s
 		};
-		if(namespace == "") {
-			namespace = "default";
-		}
-		lines.push((cluster_ip, format!("{}.{}{}", service.metadata.name, namespace, tld)));
+		lines.push((cluster_ip, format!("{}{}", name, tld)));
+	}
+
+	for service in all_services.into_iter() {
+		let name = match service.metadata.name.as_ref() {
+			None => continue,
+			Some(n) => n
+		};
+		let cluster_ip = match service.spec.and_then(|s| s.cluster_ip) {
+			None => continue,
+			Some(s) if s == "None" => continue,
+			Some(s) => s
+		};
+		let namespace = match &service.metadata.namespace {
+			None => "default",
+			Some(s) if s.is_empty() => "default",
+			Some(s) => s
+		};
+		lines.push((cluster_ip, format!("{}.{}{}", name, namespace, tld)));
 	}
 
 	Ok(lines)
@@ -100,18 +107,21 @@ impl Error for IngressNotFoundError {
 }
 // }}}
 
-async fn ingresses_tuple(client: &kube::client::APIClient, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
+async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
 	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
-	let services = kube::api::Api::v1Service(client.clone());
-	let ingresses = kube::api::Api::v1beta1Ingress(client.clone());
+	let ingresses = Api::<Ingress>::all(client.clone());
 
 	let ingress_service_ip = match {
-		let list = services.within("kube-system").list(&kube::api::ListParams::default()).await?;
+		let list = Api::<Service>::namespaced(client.clone(), "kube-system").list(&ListParams::default()).await?;
 		(|| {
-			for service in list.iter() {
+			for service in list.into_iter() {
+				let name = match service.metadata.name.as_ref() {
+					Some(v) => v,
+					None => continue
+				};
 				// TODO:  Allow configurable name
-				if(service.metadata.name == "traefik-internal") {
-					match &service.spec.cluster_ip {
+				if(name == "traefik-internal") {
+					match &service.spec.and_then(|s| s.cluster_ip) {
 						None => return None,
 						Some(s) => {
 							if(s == "None") {
@@ -130,15 +140,15 @@ async fn ingresses_tuple(client: &kube::client::APIClient, tld: &str) -> Result<
 		Some(s) => s
 	};
 
-	let list = ingresses.list(&kube::api::ListParams::default()).await?;
+	let list = ingresses.list(&ListParams::default()).await?;
 	// Capacity here is just a hint; we could have multiple hostnames per ingress, but this will save a lot of reallocations regardless
 	let mut lines = Vec::with_capacity(list.items.len());
-	for ingress in list.iter() {
+	for ingress in list.into_iter() {
 		// TODO:  Allow configurable name
-		match ingress.metadata.annotations.get("kubernetes.io/ingress.class") {
+		match ingress.spec.as_ref().and_then(|s| s.ingress_class_name.as_ref()) {
 			None => continue,
 			Some(class) => if(class == "traefik-internal") {
-				match &ingress.spec.rules {
+				match ingress.spec.and_then(|s| s.rules) {
 					None => continue,
 					Some(rules) => for rule in rules.iter() {
 						match &rule.host {
@@ -189,11 +199,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	env_logger::init();
 
 	let client = {
-		let k8s_config = match kube::config::incluster_config() {
-			Ok(c) => c,
-			Err(_) => kube::config::load_kube_config().await?
-		};
-		kube::client::APIClient::new(k8s_config)
+		let mut config = kube::Config::infer().await.unwrap();
+		config.default_namespace = "default".into();
+		config.try_into().unwrap()
 	};
 
 	let state = State{
@@ -203,14 +211,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	};
 
 	let result = actix_web::HttpServer::new(move || actix_web::App::new()
-		.data(state.clone())
+		.app_data(Data::new(state.clone()))
 		.wrap(actix_web::middleware::Logger::default())
 		.route("/services.list", actix_web::web::get().to(services))
 		.route("/unbound/services.list", actix_web::web::get().to(services_unbound))
 		.route("/ingress-internal.list", actix_web::web::get().to(ingresses))
 		.route("/unbound/ingress-internal.list", actix_web::web::get().to(ingresses_unbound))
 		.service(actix_files::Files::new("/", &dir))
-	).bind(format!("0.0.0.0:{}", port))?.run().await?;
+	).bind(format!("0.0.0.0:{}", port)).unwrap().run().await.unwrap();
 	Ok(result)
 }
 
