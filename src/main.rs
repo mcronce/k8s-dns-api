@@ -102,38 +102,30 @@ async fn services_unbound(state: actix_web::web::Data<State>) -> Result<String, 
 	Ok(response)
 }
 
+async fn find_ingress_controller_service(client: &kube::Client, service_name: &str) -> Result<String, Error> {
+	let list = Api::<Service>::namespaced(client.clone(), "kube-system").list(&ListParams::default()).await?;
+	for service in list.into_iter() {
+		let name = match service.metadata.name.as_ref() {
+			Some(v) => v,
+			None => continue
+		};
+		if(name != service_name) {
+			continue;
+		}
+		match &service.spec.and_then(|s| s.cluster_ip) {
+			None => return Err(Error::IngressNotFound),
+			Some(s) if s == "None" => return Err(Error::IngressNotFound),
+			Some(s) => return Ok(s.to_owned())
+		};
+	}
+	Err(Error::IngressNotFound)
+}
+
 async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Error> /* {{{ */ {
 	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
 	let ingresses = Api::<Ingress>::all(client.clone());
 
-	let ingress_service_ip = match {
-		let list = Api::<Service>::namespaced(client.clone(), "kube-system").list(&ListParams::default()).await?;
-		(|| {
-			for service in list.into_iter() {
-				let name = match service.metadata.name.as_ref() {
-					Some(v) => v,
-					None => continue
-				};
-				// TODO:  Allow configurable name
-				if(name == "ingress-nginx-internal-controller") {
-					match &service.spec.and_then(|s| s.cluster_ip) {
-						None => return None,
-						Some(s) => {
-							if(s == "None") {
-								return None
-							} else {
-								return Some(s.to_owned())
-							}
-						}
-					};
-				}
-			}
-			None
-		})()
-	} {
-		None => return Err(Error::IngressNotFound),
-		Some(s) => s
-	};
+	let ingress_service_ip = find_ingress_controller_service(client, "ingress-nginx-internal-controller").await?;
 
 	let list = ingresses.list(&ListParams::default()).await?;
 	// Capacity here is just a hint; we could have multiple hostnames per ingress, but this will save a lot of reallocations regardless
