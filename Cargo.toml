@@ -22,4 +22,5 @@ kube = "0.72"
 k8s-openapi = {version = "0.14", default-features = false, features = ["v1_23"]}
 thiserror = "1.0.31"
 itertools = "0.10.3"
+tikv-jemallocator = "0.4.3"
 

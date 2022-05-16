@@ -3,6 +3,9 @@ extern crate actix_web;
 extern crate env_logger;
 extern crate kube;
 
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 use std::convert::TryInto;
 use std::env;
 use std::iter;
