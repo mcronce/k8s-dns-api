@@ -125,6 +125,7 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
 	let ingresses = Api::<Ingress>::all(client.clone());
 
+	// TODO:  Allow configurable name
 	let ingress_service_ip = find_ingress_controller_service(client, "ingress-nginx-internal-controller").await?;
 
 	let list = ingresses.list(&ListParams::default()).await?;
