@@ -3,9 +3,6 @@ extern crate actix_web;
 extern crate env_logger;
 extern crate kube;
 
-#[macro_use]
-extern crate actix_helper_macros;
-
 use std::convert::TryInto;
 use std::env;
 
@@ -83,16 +80,14 @@ async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String,
 	Ok(lines)
 } // }}}
 
-#[responder]
-async fn services(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+async fn services(state: actix_web::web::Data<State>) -> Result<String, Error> {
 	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines.join("\n") + "\n")
 }
 
-#[responder]
-async fn services_unbound(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+async fn services_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
 	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines.join("\n") + "\n")
 }
 
 async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Error> /* {{{ */ {
@@ -152,16 +147,14 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 	Ok(lines)
 } // }}}
 
-#[responder]
-async fn ingresses(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+async fn ingresses(state: actix_web::web::Data<State>) -> Result<String, Error> {
 	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines.join("\n") + "\n")
 }
 
-#[responder]
-async fn ingresses_unbound(state: actix_web::web::Data<State>) -> actix_helper_macros::ResponderResult<()> {
+async fn ingresses_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
 	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
-	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
+	Ok(lines.join("\n") + "\n")
 }
 
 #[actix_rt::main]
