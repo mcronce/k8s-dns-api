@@ -72,7 +72,7 @@ async fn ingresses_unbound(client: Data<Client>, ingress_tld: Data<IngressTld>) 
 	Ok(HttpResponse::Ok().content_type("text/plain").streaming(stream))
 }
 
-#[actix_rt::main]
+#[actix_web::main]
 async fn main() {
 	let port = match env::var_os("NAMER_PORT") {
 		Some(val) => val.into_string().unwrap().parse::<usize>().unwrap(),
