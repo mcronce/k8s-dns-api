@@ -64,14 +64,18 @@ impl Iterator for IngressStream {
 		}
 
 		while let Some(ingress) = self.ingresses.next() {
-			let class = match ingress.spec.as_ref().and_then(|s| s.ingress_class_name.as_ref()) {
+			let spec = match ingress.spec {
+				None => continue,
+				Some(spec) => spec
+			};
+			let class = match spec.ingress_class_name {
 				None => continue,
 				Some(class) => class
 			};
 			if(class != "internal") {
 				continue;
 			}
-			let rules = match ingress.spec.and_then(|s| s.rules) {
+			let rules = match spec.rules {
 				None => continue,
 				Some(rules) => rules
 			};
