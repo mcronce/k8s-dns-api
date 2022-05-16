@@ -1,9 +1,5 @@
 #![feature(never_type)]
 #![allow(unused_parens)]
-extern crate actix_web;
-extern crate env_logger;
-extern crate kube;
-
 use std::convert::TryInto;
 use std::env;
 use std::iter;
