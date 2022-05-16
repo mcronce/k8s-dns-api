@@ -82,7 +82,7 @@ async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String,
 	Ok(lines)
 } // }}}
 
-async fn services(state: actix_web::web::Data<State>) -> Result<String, Error> {
+async fn services(state: Data<State>) -> Result<String, Error> {
 	let response = services_tuple(&state.client, &state.service_tld)
 		.await?
 		.iter()
@@ -92,7 +92,7 @@ async fn services(state: actix_web::web::Data<State>) -> Result<String, Error> {
 	Ok(response)
 }
 
-async fn services_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
+async fn services_unbound(state: Data<State>) -> Result<String, Error> {
 	let response = services_tuple(&state.client, &state.service_tld)
 		.await?
 		.iter()
@@ -151,7 +151,7 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 	Ok(lines)
 } // }}}
 
-async fn ingresses(state: actix_web::web::Data<State>) -> Result<String, Error> {
+async fn ingresses(state: Data<State>) -> Result<String, Error> {
 	let response = ingresses_tuple(&state.client, &state.ingress_tld)
 		.await?
 		.iter()
@@ -161,7 +161,7 @@ async fn ingresses(state: actix_web::web::Data<State>) -> Result<String, Error> 
 	Ok(response)
 }
 
-async fn ingresses_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
+async fn ingresses_unbound(state: Data<State>) -> Result<String, Error> {
 	let response = ingresses_tuple(&state.client, &state.ingress_tld)
 		.await?
 		.iter()
