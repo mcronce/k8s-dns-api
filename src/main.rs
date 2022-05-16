@@ -8,13 +8,15 @@ extern crate actix_helper_macros;
 
 use std::convert::TryInto;
 use std::env;
-use std::error::Error;
 
 use actix_web::web::Data;
 use k8s_openapi::api::core::v1::Service;
 use k8s_openapi::api::networking::v1::Ingress;
 use kube::api::Api;
 use kube::api::ListParams;
+
+mod error;
+use error::Error;
 
 #[derive(Clone)]
 struct State {
@@ -40,7 +42,7 @@ fn service_line<T>(service: &T, tld: &str, include_namespace: bool) -> Option<St
 } // }}}
 */
 
-async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
+async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, kube::error::Error> /* {{{ */ {
 	let default_services = Api::<Service>::default_namespaced(client.clone()).list(&ListParams::default()).await?;
 	let all_services = Api::<Service>::all(client.clone()).list(&ListParams::default()).await?;
 
@@ -93,21 +95,7 @@ async fn services_unbound(state: actix_web::web::Data<State>) -> actix_helper_ma
 	Ok(actix_helper_macros::text!(lines.join("\n") + "\n"))
 }
 
-#[derive(Debug)]
-struct IngressNotFoundError; // {{{
-impl std::fmt::Display for IngressNotFoundError {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "Ingress not found")
-	}
-}
-impl Error for IngressNotFoundError {
-	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		None
-	}
-}
-// }}}
-
-async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> /* {{{ */ {
+async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Error> /* {{{ */ {
 	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
 	let ingresses = Api::<Ingress>::all(client.clone());
 
@@ -136,7 +124,7 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 			None
 		})()
 	} {
-		None => return Err(Box::new(IngressNotFoundError)),
+		None => return Err(Error::IngressNotFound),
 		Some(s) => s
 	};
 
@@ -177,7 +165,7 @@ async fn ingresses_unbound(state: actix_web::web::Data<State>) -> actix_helper_m
 }
 
 #[actix_rt::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
 	let port = match env::var_os("NAMER_PORT") {
 		Some(val) => val.into_string().unwrap().parse::<usize>().unwrap(),
 		None => 80
@@ -210,7 +198,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		client
 	};
 
-	let result = actix_web::HttpServer::new(move || actix_web::App::new()
+	actix_web::HttpServer::new(move || actix_web::App::new()
 		.app_data(Data::new(state.clone()))
 		.wrap(actix_web::middleware::Logger::default())
 		.route("/services.list", actix_web::web::get().to(services))
@@ -219,6 +207,5 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		.route("/unbound/ingress-internal.list", actix_web::web::get().to(ingresses_unbound))
 		.service(actix_files::Files::new("/", &dir))
 	).bind(format!("0.0.0.0:{}", port)).unwrap().run().await.unwrap();
-	Ok(result)
 }
 
