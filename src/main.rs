@@ -92,7 +92,10 @@ async fn main() {
 	});
 
 	env::set_var("RUST_LOG", "actix_web=info");
-	env_logger::init();
+	tracing_subscriber::fmt()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.compact()
+		.init();
 
 	let client: Client = {
 		let mut config = kube::Config::infer().await.unwrap();
