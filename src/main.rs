@@ -58,7 +58,7 @@ async fn services(client: Data<Client>, service_tld: Data<ServiceTld>) -> Result
 async fn services_unbound(client: Data<Client>, service_tld: Data<ServiceTld>) -> Result<HttpResponse, Error> {
 	let stream = ServiceStream::new(&client, &service_tld.0)
 		.await?
-		.map(|r| r.map(|t| format!("{} 60 IN A {}\n", t.1, t.0).into()))
+		.map(|r| r.map(|t| format!("local-data: \"{} 60 IN A {}\"\n", t.1, t.0).into()))
 		.chain(stream::iter(iter::once(Ok("\n".into()))));
 	Ok(HttpResponse::Ok().content_type("text/plain").streaming(stream))
 }
