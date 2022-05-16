@@ -13,16 +13,15 @@ use k8s_openapi::api::core::v1::Service;
 use k8s_openapi::api::networking::v1::Ingress;
 use kube::api::Api;
 use kube::api::ListParams;
+use kube::Client;
 
 mod error;
 use error::Error;
 
-#[derive(Clone)]
-struct State {
-	service_tld: String,
-	ingress_tld: String,
-	client: kube::Client
-}
+#[repr(transparent)]
+struct ServiceTld(String);
+#[repr(transparent)]
+struct IngressTld(String);
 
 /*
 // TODO:  Figure out how to make this work since the OpenAPI types are all versioned
@@ -82,8 +81,8 @@ async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String,
 	Ok(lines)
 } // }}}
 
-async fn services(state: Data<State>) -> Result<String, Error> {
-	let response = services_tuple(&state.client, &state.service_tld)
+async fn services(client: Data<Client>, service_tld: Data<ServiceTld>) -> Result<String, Error> {
+	let response = services_tuple(&client, &service_tld.0)
 		.await?
 		.iter()
 		.map(|t| format!("{} {}", t.0, t.1))
@@ -92,8 +91,8 @@ async fn services(state: Data<State>) -> Result<String, Error> {
 	Ok(response)
 }
 
-async fn services_unbound(state: Data<State>) -> Result<String, Error> {
-	let response = services_tuple(&state.client, &state.service_tld)
+async fn services_unbound(client: Data<Client>, service_tld: Data<ServiceTld>) -> Result<String, Error> {
+	let response = services_tuple(&client, &service_tld.0)
 		.await?
 		.iter()
 		.map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0))
@@ -151,8 +150,8 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 	Ok(lines)
 } // }}}
 
-async fn ingresses(state: Data<State>) -> Result<String, Error> {
-	let response = ingresses_tuple(&state.client, &state.ingress_tld)
+async fn ingresses(client: Data<Client>, ingress_tld: Data<IngressTld>) -> Result<String, Error> {
+	let response = ingresses_tuple(&client, &ingress_tld.0)
 		.await?
 		.iter()
 		.map(|t| format!("{} {}", t.0, t.1))
@@ -161,8 +160,8 @@ async fn ingresses(state: Data<State>) -> Result<String, Error> {
 	Ok(response)
 }
 
-async fn ingresses_unbound(state: Data<State>) -> Result<String, Error> {
-	let response = ingresses_tuple(&state.client, &state.ingress_tld)
+async fn ingresses_unbound(client: Data<Client>, ingress_tld: Data<IngressTld>) -> Result<String, Error> {
+	let response = ingresses_tuple(&client, &ingress_tld.0)
 		.await?
 		.iter()
 		.map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0))
@@ -181,32 +180,32 @@ async fn main() {
 		Some(val) => val.into_string().unwrap(),
 		None => "/www".to_string()
 	};
-	let service_tld = match env::var_os("NAMER_SERVICE_TLD") {
+	let service_tld = ServiceTld(match env::var_os("NAMER_SERVICE_TLD") {
 		Some(val) => format!(".{}", val.into_string().unwrap()),
 		None => "".to_string()
-	};
-	let ingress_tld = match env::var_os("NAMER_INGRESS_TLD") {
+	});
+	let ingress_tld = IngressTld(match env::var_os("NAMER_INGRESS_TLD") {
 		Some(val) => format!(".{}", val.into_string().unwrap()),
 		None => "".to_string()
-	};
+	});
 
 	env::set_var("RUST_LOG", "actix_web=info");
 	env_logger::init();
 
-	let client = {
+	let client: Client = {
 		let mut config = kube::Config::infer().await.unwrap();
 		config.default_namespace = "default".into();
 		config.try_into().unwrap()
 	};
 
-	let state = State{
-		service_tld,
-		ingress_tld,
-		client
-	};
+	let service_tld = Data::new(service_tld);
+	let ingress_tld = Data::new(ingress_tld);
+	let client = Data::new(client);
 
 	actix_web::HttpServer::new(move || actix_web::App::new()
-		.app_data(Data::new(state.clone()))
+		.app_data(service_tld.clone())
+		.app_data(ingress_tld.clone())
+		.app_data(client.clone())
 		.wrap(actix_web::middleware::Logger::default())
 		.route("/services.list", actix_web::web::get().to(services))
 		.route("/unbound/services.list", actix_web::web::get().to(services_unbound))
