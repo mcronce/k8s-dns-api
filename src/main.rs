@@ -122,7 +122,6 @@ async fn find_ingress_controller_service(client: &kube::Client, service_name: &s
 }
 
 async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Error> /* {{{ */ {
-	// TODO:  Fix the absolutely hideous syntax in this function, especially that closure match
 	let ingresses = Api::<Ingress>::all(client.clone());
 
 	// TODO:  Allow configurable name
