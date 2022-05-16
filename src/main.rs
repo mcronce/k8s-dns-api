@@ -5,8 +5,10 @@ extern crate kube;
 
 use std::convert::TryInto;
 use std::env;
+use std::iter;
 
 use actix_web::web::Data;
+use itertools::Itertools;
 use k8s_openapi::api::core::v1::Service;
 use k8s_openapi::api::networking::v1::Ingress;
 use kube::api::Api;
@@ -81,13 +83,23 @@ async fn services_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String,
 } // }}}
 
 async fn services(state: actix_web::web::Data<State>) -> Result<String, Error> {
-	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
-	Ok(lines.join("\n") + "\n")
+	let response = services_tuple(&state.client, &state.service_tld)
+		.await?
+		.iter()
+		.map(|t| format!("{} {}", t.0, t.1))
+		.chain(iter::once("".into()))
+		.join("\n");
+	Ok(response)
 }
 
 async fn services_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
-	let lines: Vec<String> = services_tuple(&state.client, &state.service_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
-	Ok(lines.join("\n") + "\n")
+	let response = services_tuple(&state.client, &state.service_tld)
+		.await?
+		.iter()
+		.map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0))
+		.chain(iter::once("".into()))
+		.join("\n");
+	Ok(response)
 }
 
 async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String, String)>, Error> /* {{{ */ {
@@ -148,13 +160,23 @@ async fn ingresses_tuple(client: &kube::Client, tld: &str) -> Result<Vec<(String
 } // }}}
 
 async fn ingresses(state: actix_web::web::Data<State>) -> Result<String, Error> {
-	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("{} {}", t.0, t.1)).collect();
-	Ok(lines.join("\n") + "\n")
+	let response = ingresses_tuple(&state.client, &state.ingress_tld)
+		.await?
+		.iter()
+		.map(|t| format!("{} {}", t.0, t.1))
+		.chain(iter::once("".into()))
+		.join("\n");
+	Ok(response)
 }
 
 async fn ingresses_unbound(state: actix_web::web::Data<State>) -> Result<String, Error> {
-	let lines: Vec<String> = ingresses_tuple(&state.client, &state.ingress_tld).await?.iter().map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0)).collect();
-	Ok(lines.join("\n") + "\n")
+	let response = ingresses_tuple(&state.client, &state.ingress_tld)
+		.await?
+		.iter()
+		.map(|t| format!("local-data: \"{} 60 IN A {}\"", t.1, t.0))
+		.chain(iter::once("".into()))
+		.join("\n");
+	Ok(response)
 }
 
 #[actix_rt::main]
