@@ -2,7 +2,6 @@ use std::vec::IntoIter;
 
 use futures::Stream;
 
-use compact_str::CompactString;
 use k8s_openapi::api::core::v1::Service;
 use k8s_openapi::api::networking::v1::Ingress;
 use k8s_openapi::api::networking::v1::IngressRule;
@@ -11,15 +10,9 @@ use kube::Api;
 
 use crate::error::Error;
 
-fn format_name(name: &str, tld: &str) -> CompactString {
-	let mut name: CompactString = name.into();
-	name.push_str(tld);
-	name
-}
-
 pub struct IngressStream {
-	tld: CompactString,
-	service_ip: CompactString,
+	tld: String,
+	service_ip: String,
 	ingresses: IntoIter<Ingress>,
 	current_ingress: Option<IntoIter<IngressRule>>
 }
@@ -45,13 +38,13 @@ async fn find_ingress_controller_service(client: &kube::Client, service_name: &s
 
 impl IngressStream {
 	#![allow(clippy::new_ret_no_self)] // IngressStream will likely impl Stream in the future, and this will reduce changes at the call sites
-	pub async fn new(client: &kube::Client, tld: &str) -> Result<impl Stream<Item = Result<(CompactString, CompactString), !>>, Error> {
+	pub async fn new(client: &kube::Client, tld: &str) -> Result<impl Stream<Item = Result<(String, String), !>>, Error> {
 		let ingresses = Api::<Ingress>::all(client.clone()).list(&ListParams::default()).await?;
 		// TODO:  Allow configurable name
 		let service_ip = find_ingress_controller_service(client, "ingress-nginx-internal-controller").await?;
 		Ok(futures::stream::iter(Self{
-			tld: tld.into(),
-			service_ip: service_ip.into(),
+			tld: tld.to_owned(),
+			service_ip,
 			ingresses: ingresses.into_iter(),
 			current_ingress: None
 		}))
@@ -59,12 +52,12 @@ impl IngressStream {
 }
 
 impl Iterator for IngressStream {
-	type Item = Result<(CompactString, CompactString), !>;
+	type Item = Result<(String, String), !>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(rules) = &mut self.current_ingress {
 			for rule in rules {
 				if let Some(host) = &rule.host {
-					return Some(Ok((self.service_ip.clone(), format_name(&host, &self.tld))));
+					return Some(Ok((self.service_ip.clone(), format!("{}{}", host, &self.tld))));
 				}
 			}
 			self.current_ingress = None;
