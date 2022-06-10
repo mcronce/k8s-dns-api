@@ -6,6 +6,7 @@ use futures::task::Context;
 use futures::task::Poll;
 use futures::Future;
 
+use compact_str::CompactString;
 use k8s_openapi::api::core::v1::Service;
 use kube::api::ListParams;
 use kube::core::ObjectList;
@@ -21,7 +22,7 @@ enum State {
 
 pub struct ServiceStream {
 	client: kube::Client,
-	tld: String,
+	tld: CompactString,
 	state: State
 }
 
@@ -35,14 +36,14 @@ impl ServiceStream {
 		let services = Api::<Service>::default_namespaced(client.clone()).list(&ListParams::default()).await?;
 		Ok(Self{
 			client: client.clone(),
-			tld: tld.to_owned(),
+			tld: tld.into(),
 			state: State::Default(services.into_iter())
 		})
 	}
 }
 
 impl Stream for ServiceStream {
-	type Item = Result<(String, String), kube::error::Error>;
+	type Item = Result<(CompactString, String), kube::error::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		match &mut self.state {
 			State::Default(iter) => {
@@ -56,7 +57,7 @@ impl Stream for ServiceStream {
 						Some(s) if s == "None" => continue,
 						Some(s) => s
 					};
-					return Poll::Ready(Some(Ok((cluster_ip, format!("{}{}", name, &self.tld)))));
+					return Poll::Ready(Some(Ok((cluster_ip.into(), format!("{}{}", name, &self.tld)))));
 				}
 				self.state = State::LoadingAll(Box::pin(load_all_services(self.client.clone())));
 				ctx.waker().wake_by_ref();
@@ -90,7 +91,7 @@ impl Stream for ServiceStream {
 						Some(s) if s.is_empty() => "default",
 						Some(s) => s
 					};
-					return Poll::Ready(Some(Ok((cluster_ip, format!("{}.{}{}", name, namespace, &self.tld)))));
+					return Poll::Ready(Some(Ok((cluster_ip.into(), format!("{}.{}{}", name, namespace, &self.tld)))));
 				}
 				self.state = State::Done;
 				Poll::Ready(None)
