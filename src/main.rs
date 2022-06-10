@@ -18,6 +18,9 @@ use services_stream::ServiceStream;
 mod ingresses_stream;
 use ingresses_stream::IngressStream;
 
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 #[repr(transparent)]
 struct ServiceTld(String);
 #[repr(transparent)]
