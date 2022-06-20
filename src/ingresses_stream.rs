@@ -64,7 +64,7 @@ impl Iterator for IngressStream {
 		if let Some(rules) = &mut self.current_ingress {
 			for rule in rules {
 				if let Some(host) = &rule.host {
-					return Some(Ok((self.service_ip.clone(), format_name(&host, &self.tld))));
+					return Some(Ok((self.service_ip.clone(), format_name(host, &self.tld))));
 				}
 			}
 			self.current_ingress = None;

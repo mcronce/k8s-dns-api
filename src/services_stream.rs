@@ -27,8 +27,7 @@ pub struct ServiceStream {
 }
 
 async fn load_all_services(client: kube::Client) -> Result<ObjectList<Service>, Error> {
-	let result = Api::<Service>::all(client).list(&ListParams::default()).await;
-	result
+	Api::<Service>::all(client).list(&ListParams::default()).await
 }
 
 impl ServiceStream {
