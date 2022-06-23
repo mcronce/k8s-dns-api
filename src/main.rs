@@ -9,6 +9,8 @@ use futures::StreamExt;
 
 use actix_web::web::Data;
 use actix_web::HttpResponse;
+use compact_str::format_compact;
+use compact_str::CompactString;
 use kube::Client;
 
 mod error;
@@ -22,9 +24,9 @@ use ingresses_stream::IngressStream;
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[repr(transparent)]
-struct ServiceTld(String);
+struct ServiceTld(CompactString);
 #[repr(transparent)]
-struct IngressTld(String);
+struct IngressTld(CompactString);
 
 /*
 // TODO:  Figure out how to make this work since the OpenAPI types are all versioned
@@ -85,14 +87,8 @@ async fn main() {
 		Some(val) => val.into_string().unwrap(),
 		None => "/www".to_string()
 	};
-	let service_tld = ServiceTld(match env::var_os("NAMER_SERVICE_TLD") {
-		Some(val) => format!(".{}", val.into_string().unwrap()),
-		None => "".to_string()
-	});
-	let ingress_tld = IngressTld(match env::var_os("NAMER_INGRESS_TLD") {
-		Some(val) => format!(".{}", val.into_string().unwrap()),
-		None => "".to_string()
-	});
+	let service_tld = ServiceTld(env::var_os("NAMER_SERVICE_TLD").map(|s| format_compact!(".{}", s.into_string().unwrap())).unwrap_or_default());
+	let ingress_tld = IngressTld(env::var_os("NAMER_INGRESS_TLD").map(|s| format_compact!(".{}", s.into_string().unwrap())).unwrap_or_default());
 
 	env::set_var("RUST_LOG", "actix_web=info");
 	tracing_subscriber::fmt()
